@@ -3,25 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>4-7-8 呼吸法引導工具 (最終穩定銜接版)</title>
+    <title>4-7-8 呼吸法引導工具 (最終穩定版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 核心圓球設置 (響應式) */
+        /* 核心圓球設置 (使用 vw 單位實現手機響應式) */
         .breathing-ball {
-            /* 讓 transform 屬性可以平滑過渡 */
+            /* 過渡設置：確保 transform 平滑變化 */
             transition-property: all;
             transition-timing-function: ease-in-out;
             
-            /* 尺寸設定 */
+            /* 尺寸設定：手機優先，並限制最大尺寸 */
             width: 50vw;  
             height: 50vw; 
             max-width: 300px; 
             max-height: 300px; 
             
-            /* 初始尺寸 */
-            transform: scale(1.0); 
+            transform: scale(1.0); /* 初始尺寸 */
             
-            /* 顏色與光暈 */
             background-color: #4a90e2; 
             box-shadow: 
                 0 0 10px rgba(74, 144, 226, 0.8), 
@@ -29,14 +27,30 @@
                 0 0 40px rgba(74, 144, 226, 0.4), 
                 0 0 60px rgba(74, 144, 226, 0.2); 
             
+            /* Z-index 修正：確保圓球在文字下方 */
             z-index: 10;
         }
         
+        /* 確保文字層級更高 */
         .high-z-index {
             z-index: 20;
             position: relative; 
         }
 
+        /* 憋氣波動動畫 (使用 CSS Keyframes，但只針對微小的 scale 變化) */
+        /* 這是為了避免 JS 波動可能導致的性能問題，若仍不順暢，請使用 JS 波動 */
+        @keyframes subtle-pulse {
+            0%, 100% { transform: scale(1.0); }
+            50% { transform: scale(1.03); } 
+        }
+
+        /* 應用於憋氣階段的額外波動 */
+        .pulse-animation {
+            /* 這裡關鍵！只影響 scale 波動，不影響 transform 基底尺寸 */
+            animation: subtle-pulse 2s infinite ease-in-out;
+        }
+
+        /* 手機字體調整 */
         @media (max-width: 640px) {
             #countdown-text {
                 font-size: 4rem; 
@@ -86,66 +100,21 @@
         const countdownText = document.getElementById('countdown-text');
         const button = document.getElementById('toggle-button');
         let isRunning = false;
-        let intervalId;       // 用於計數器
-        let pulseIntervalId;  // 【新增】用於波動模擬
+        let intervalId;
 
         const TIMES = {
-            IN: 4,      // 區間 2
-            HOLD: 7,    // 區間 3
-            OUT: 8      // 區間 4
+            IN: 4,      
+            HOLD: 7,    
+            OUT: 8      
         };
         
         // 規格點
-        const SCALE_MIN = 0.5; 
-        const SCALE_MAX = 1.5; 
-        
-        // 波動參數
-        const PULSE_MIN_SCALE = 1.0; // 相對於基底尺寸 (SCALE_MAX)
-        const PULSE_MAX_SCALE = 1.03;
+        const SCALE_MIN = 0.5; // 最小尺寸 (開始吸氣/吐氣結束)
+        const SCALE_MAX = 1.5; // 最大尺寸 (吸氣結束/憋氣/吐氣開始)
 
         function setTransitionDuration(seconds) {
             ball.style.transitionDuration = `${seconds}s`;
         }
-        
-        // 【新增】波動模擬函式 (取代 CSS Animation)
-        function startPulse() {
-            let isGrowing = true;
-            let currentPulseScale = PULSE_MIN_SCALE;
-            const pulseSpeed = 0.001; // 波動速度
-
-            // 設定極短的間隔，讓視覺看起來像 CSS Animation
-            pulseIntervalId = setInterval(() => {
-                if (!isRunning) {
-                    clearInterval(pulseIntervalId);
-                    return;
-                }
-
-                // 根據波動方向微調尺寸
-                if (isGrowing) {
-                    currentPulseScale += pulseSpeed;
-                    if (currentPulseScale >= PULSE_MAX_SCALE) {
-                        isGrowing = false;
-                    }
-                } else {
-                    currentPulseScale -= pulseSpeed;
-                    if (currentPulseScale <= PULSE_MIN_SCALE) {
-                        isGrowing = true;
-                    }
-                }
-                
-                // 波動只影響圓球的 transform，基底尺寸依然是 SCALE_MAX
-                ball.style.transform = `scale(${SCALE_MAX * currentPulseScale})`;
-
-            }, 20); // 每 20ms 更新一次波動
-        }
-        
-        // 停止波動
-        function stopPulse() {
-            clearInterval(pulseIntervalId);
-            // 確保圓球尺寸回到 SCALE_MAX (沒有波動的狀態)
-            ball.style.transform = `scale(${SCALE_MAX})`;
-        }
-
 
         function startCountdown(duration, nextPhaseCallback) {
             let timeLeft = duration;
@@ -172,19 +141,17 @@
         // 1. 吸氣 (Inhale): 區間 1 (MIN) -> 區間 2 (MIN->MAX)
         function inhale() {
             if (!isRunning) return;
-            stopPulse(); // 確保沒有殘餘波動
 
-            // 區間 1: 顯示「開始吸氣...」
+            // 區間 1: 顯示「開始吸氣...」 (圓球為 MIN 規格)
             text.textContent = "開始吸氣...";
             
-            // 圓球維持在最小尺寸
             ball.style.transform = `scale(${SCALE_MIN})`; 
+            ball.classList.remove('pulse-animation'); // 確保沒有波動
 
             requestAnimationFrame(() => {
                 text.textContent = "吸氣區間..."; // 區間 2: 顯示「吸氣區間...」
                 setTransitionDuration(TIMES.IN);
-                
-                // 【關鍵點】圓球從 MIN 轉換到 MAX (吸氣結束規格)
+                // 圓球從 MIN 轉換到 MAX (吸氣結束規格，完美銜接憋氣)
                 ball.style.transform = `scale(${SCALE_MAX})`; 
                 startCountdown(TIMES.IN, hold);
             });
@@ -196,12 +163,12 @@
 
             text.textContent = "憋氣..."; // 區間 3: 顯示「憋氣...」
             
-            // 確保圓球在 MAX 尺寸上，且過渡時間設為極短，避免吸氣結束後再次觸發過渡
-            setTransitionDuration(0.05);
+            // 確保圓球在 MAX 尺寸上
+            setTransitionDuration(0.05); // 設為極短，避免過渡干擾
             ball.style.transform = `scale(${SCALE_MAX})`; 
             
-            // 【關鍵點】啟動波動模擬
-            startPulse();
+            // 增加波動
+            ball.classList.add('pulse-animation'); 
             
             startCountdown(TIMES.HOLD, exhale);
         }
@@ -209,13 +176,14 @@
         // 3. 吐氣 (Exhale): 區間 4 (MAX->MIN) -> 區間 5 (MIN)
         function exhale() {
             if (!isRunning) return;
-            stopPulse(); // 停止波動，圓球尺寸回到 SCALE_MAX
-            
-            // 圓球從 SCALE_MAX 尺寸開始縮小
+
             text.textContent = "吐氣區間..."; // 區間 4: 顯示「吐氣區間...」
             setTransitionDuration(TIMES.OUT);
             
-            // 【關鍵點】圓球從 MAX 轉換到 MIN
+            // 移除波動
+            ball.classList.remove('pulse-animation');
+            
+            // 圓球從 MAX 轉換到 MIN (吐氣結束規格，完美銜接下一次吸氣)
             ball.style.transform = `scale(${SCALE_MIN})`; 
 
             // 區間 5: 銜接點的文字提示
@@ -236,6 +204,7 @@
             isRunning = true;
             button.textContent = "停止";
             
+            // 首次啟動：設置初始尺寸為最小 
             ball.style.transform = `scale(${SCALE_MIN})`;
 
             requestAnimationFrame(inhale);
@@ -247,11 +216,11 @@
             text.textContent = "已暫停，點擊開始...";
             
             clearInterval(intervalId);
-            stopPulse(); // 停止波動
 
             countdownText.classList.add('opacity-0');
             countdownText.textContent = ''; 
 
+            ball.classList.remove('pulse-animation');
             setTransitionDuration(0.5); 
             ball.style.transform = `scale(${SCALE_MIN})`; 
         }
