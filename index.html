@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4-7-8 呼吸法引導工具 (最終穩定銜接版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 核心圓球設置 (響應式) */
+        .breathing-ball {
+            /* 讓 transform 屬性可以平滑過渡 */
+            transition-property: all;
+            transition-timing-function: ease-in-out;
+            
+            /* 尺寸設定 */
+            width: 50vw;  
+            height: 50vw; 
+            max-width: 300px; 
+            max-height: 300px; 
+            
+            /* 初始尺寸 */
+            transform: scale(1.0); 
+            
+            /* 顏色與光暈 */
+            background-color: #4a90e2; 
+            box-shadow: 
+                0 0 10px rgba(74, 144, 226, 0.8), 
+                0 0 20px rgba(74, 144, 226, 0.6), 
+                0 0 40px rgba(74, 144, 226, 0.4), 
+                0 0 60px rgba(74, 144, 226, 0.2); 
+            
+            z-index: 10;
+        }
+        
+        .high-z-index {
+            z-index: 20;
+            position: relative; 
+        }
+
+        @media (max-width: 640px) {
+            #countdown-text {
+                font-size: 4rem; 
+            }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'deep-sea-blue': '#0a192f',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-deep-sea-blue text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 class="text-4xl font-light mb-12 tracking-wider high-z-index">4-7-8 呼吸法引導</h1>
+
+    <div id="instruction-text" class="text-5xl font-extralight mb-4 h-20 flex items-center justify-center tracking-widest high-z-index">
+        點擊下方開始按鈕...
+    </div>
+
+    <div id="countdown-text" class="text-7xl font-bold text-blue-300 mb-12 h-20 flex items-center justify-center opacity-0 transition-opacity duration-500 high-z-index">
+        
+    </div>
+
+    <div id="breathing-ball" 
+         class="breathing-ball rounded-full flex-shrink-0">
+    </div>
+
+    <button id="toggle-button" 
+            class="mt-16 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-xl rounded-full shadow-lg transition duration-300 ease-in-out high-z-index"
+            onclick="toggleBreathing()">
+        開始呼吸
+    </button>
+    
+    <p class="mt-8 text-sm text-gray-400 high-z-index">吸氣 4 秒 - 憋氣 7 秒 - 吐氣 8 秒 (無限循環)</p>
+
+
+    <script>
+        const ball = document.getElementById('breathing-ball');
+        const text = document.getElementById('instruction-text');
+        const countdownText = document.getElementById('countdown-text');
+        const button = document.getElementById('toggle-button');
+        let isRunning = false;
+        let intervalId;       // 用於計數器
+        let pulseIntervalId;  // 【新增】用於波動模擬
+
+        const TIMES = {
+            IN: 4,      // 區間 2
+            HOLD: 7,    // 區間 3
+            OUT: 8      // 區間 4
+        };
+        
+        // 規格點
+        const SCALE_MIN = 0.5; 
+        const SCALE_MAX = 1.5; 
+        
+        // 波動參數
+        const PULSE_MIN_SCALE = 1.0; // 相對於基底尺寸 (SCALE_MAX)
+        const PULSE_MAX_SCALE = 1.03;
+
+        function setTransitionDuration(seconds) {
+            ball.style.transitionDuration = `${seconds}s`;
+        }
+        
+        // 【新增】波動模擬函式 (取代 CSS Animation)
+        function startPulse() {
+            let isGrowing = true;
+            let currentPulseScale = PULSE_MIN_SCALE;
+            const pulseSpeed = 0.001; // 波動速度
+
+            // 設定極短的間隔，讓視覺看起來像 CSS Animation
+            pulseIntervalId = setInterval(() => {
+                if (!isRunning) {
+                    clearInterval(pulseIntervalId);
+                    return;
+                }
+
+                // 根據波動方向微調尺寸
+                if (isGrowing) {
+                    currentPulseScale += pulseSpeed;
+                    if (currentPulseScale >= PULSE_MAX_SCALE) {
+                        isGrowing = false;
+                    }
+                } else {
+                    currentPulseScale -= pulseSpeed;
+                    if (currentPulseScale <= PULSE_MIN_SCALE) {
+                        isGrowing = true;
+                    }
+                }
+                
+                // 波動只影響圓球的 transform，基底尺寸依然是 SCALE_MAX
+                ball.style.transform = `scale(${SCALE_MAX * currentPulseScale})`;
+
+            }, 20); // 每 20ms 更新一次波動
+        }
+        
+        // 停止波動
+        function stopPulse() {
+            clearInterval(pulseIntervalId);
+            // 確保圓球尺寸回到 SCALE_MAX (沒有波動的狀態)
+            ball.style.transform = `scale(${SCALE_MAX})`;
+        }
+
+
+        function startCountdown(duration, nextPhaseCallback) {
+            let timeLeft = duration;
+            
+            countdownText.classList.remove('opacity-0');
+            countdownText.textContent = timeLeft;
+
+            clearInterval(intervalId);
+
+            intervalId = setInterval(() => {
+                timeLeft--;
+                countdownText.textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    clearInterval(intervalId);
+                    countdownText.classList.add('opacity-0');
+                    nextPhaseCallback();
+                }
+            }, 1000);
+        }
+        
+        // --- 核心呼吸循環邏輯 ---
+
+        // 1. 吸氣 (Inhale): 區間 1 (MIN) -> 區間 2 (MIN->MAX)
+        function inhale() {
+            if (!isRunning) return;
+            stopPulse(); // 確保沒有殘餘波動
+
+            // 區間 1: 顯示「開始吸氣...」
+            text.textContent = "開始吸氣...";
+            
+            // 圓球維持在最小尺寸
+            ball.style.transform = `scale(${SCALE_MIN})`; 
+
+            requestAnimationFrame(() => {
+                text.textContent = "吸氣區間..."; // 區間 2: 顯示「吸氣區間...」
+                setTransitionDuration(TIMES.IN);
+                
+                // 【關鍵點】圓球從 MIN 轉換到 MAX (吸氣結束規格)
+                ball.style.transform = `scale(${SCALE_MAX})`; 
+                startCountdown(TIMES.IN, hold);
+            });
+        }
+
+        // 2. 憋氣 (Hold): 區間 3 (MAX)
+        function hold() {
+            if (!isRunning) return;
+
+            text.textContent = "憋氣..."; // 區間 3: 顯示「憋氣...」
+            
+            // 確保圓球在 MAX 尺寸上，且過渡時間設為極短，避免吸氣結束後再次觸發過渡
+            setTransitionDuration(0.05);
+            ball.style.transform = `scale(${SCALE_MAX})`; 
+            
+            // 【關鍵點】啟動波動模擬
+            startPulse();
+            
+            startCountdown(TIMES.HOLD, exhale);
+        }
+
+        // 3. 吐氣 (Exhale): 區間 4 (MAX->MIN) -> 區間 5 (MIN)
+        function exhale() {
+            if (!isRunning) return;
+            stopPulse(); // 停止波動，圓球尺寸回到 SCALE_MAX
+            
+            // 圓球從 SCALE_MAX 尺寸開始縮小
+            text.textContent = "吐氣區間..."; // 區間 4: 顯示「吐氣區間...」
+            setTransitionDuration(TIMES.OUT);
+            
+            // 【關鍵點】圓球從 MAX 轉換到 MIN
+            ball.style.transform = `scale(${SCALE_MIN})`; 
+
+            // 區間 5: 銜接點的文字提示
+            let countdownEndTime = TIMES.OUT * 1000;
+            setTimeout(() => {
+                if (isRunning) {
+                     text.textContent = "吐氣銜接吸氣..."; 
+                }
+            }, countdownEndTime);
+
+            startCountdown(TIMES.OUT, inhale);
+        }
+
+        // --- 控制邏輯 ---
+        function startBreathing() {
+            if (isRunning) return;
+            
+            isRunning = true;
+            button.textContent = "停止";
+            
+            ball.style.transform = `scale(${SCALE_MIN})`;
+
+            requestAnimationFrame(inhale);
+        }
+
+        function stopBreathing() {
+            isRunning = false;
+            button.textContent = "開始呼吸";
+            text.textContent = "已暫停，點擊開始...";
+            
+            clearInterval(intervalId);
+            stopPulse(); // 停止波動
+
+            countdownText.classList.add('opacity-0');
+            countdownText.textContent = ''; 
+
+            setTransitionDuration(0.5); 
+            ball.style.transform = `scale(${SCALE_MIN})`; 
+        }
+
+        function toggleBreathing() {
+            if (isRunning) {
+                stopBreathing();
+            } else {
+                startBreathing();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setTransitionDuration(TIMES.IN);
+        });
+        
+    </script>
+</body>
+</html>
