@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>4-7-8 呼吸法引導工具 (手機穩定修正版)</title>
+    <title>4-7-8 呼吸法引導工具 (最終穩定版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 核心圓球設置 (使用 vw 單位實現手機響應式) */
+        /* 核心圓球設置 (Z-index, 響應式尺寸, 過渡設置) */
         .breathing-ball {
-            /* 設置過渡，用於吸氣和吐氣 */
+            /* 設置過渡，用於吸氣和吐氣的平滑尺寸變化 */
             transition-property: all;
             transition-timing-function: ease-in-out;
             
@@ -26,15 +26,16 @@
                 0 0 40px rgba(74, 144, 226, 0.4), 
                 0 0 60px rgba(74, 144, 226, 0.2); 
             
-            z-index: 10;
+            z-index: 10; /* 圓球層級在文字下方 */
         }
         
+        /* 確保文字層級更高 */
         .high-z-index {
             z-index: 20;
             position: relative; 
         }
 
-        /* 【關鍵修正】簡化波動動畫，避免複雜 Keyframes 衝突 */
+        /* 憋氣波動動畫定義 */
         @keyframes simple-pulse {
             0%, 100% { transform: scale(1.0); } 
             50% { transform: scale(1.01); } /* 極輕微波動 */
@@ -42,7 +43,7 @@
 
         /* 應用於憋氣階段的波動 */
         .pulse-animation-simple {
-            /* 這次我們將動畫持續時間設得長一些，並使用 forwards 確保穩定 */
+            /* 使用 forwards 確保動畫穩定，並與 transform 屬性衝突最小化 */
             animation: simple-pulse 4s infinite ease-in-out forwards;
         }
 
@@ -52,6 +53,43 @@
             }
         }
     </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'deep-sea-blue': '#0a192f',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-deep-sea-blue text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 class="text-4xl font-light mb-12 tracking-wider high-z-index">4-7-8 呼吸法引導</h1>
+
+    <div id="instruction-text" class="text-5xl font-extralight mb-4 h-20 flex items-center justify-center tracking-widest high-z-index">
+        點擊下方開始按鈕...
+    </div>
+
+    <div id="countdown-text" class="text-7xl font-bold text-blue-300 mb-12 h-20 flex items-center justify-center opacity-0 transition-opacity duration-500 high-z-index">
+        
+    </div>
+
+    <div id="breathing-ball" 
+         class="breathing-ball rounded-full flex-shrink-0">
+    </div>
+
+    <button id="toggle-button" 
+            class="mt-16 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-xl rounded-full shadow-lg transition duration-300 ease-in-out high-z-index"
+            onclick="toggleBreathing()">
+        開始呼吸
+    </button>
+    
+    <p class="mt-8 text-sm text-gray-400 high-z-index">吸氣 4 秒 - 憋氣 7 秒 - 吐氣 8 秒 (無限循環)</p>
+
+
     <script>
         const ball = document.getElementById('breathing-ball');
         const text = document.getElementById('instruction-text');
@@ -67,8 +105,8 @@
         };
         
         // 規格點
-        const SCALE_MIN = 0.5; 
-        const SCALE_MAX = 1.5; 
+        const SCALE_MIN = 0.5; // 最小尺寸
+        const SCALE_MAX = 1.5; // 最大尺寸
 
         function setTransitionDuration(seconds) {
             ball.style.transitionDuration = `${seconds}s`;
@@ -99,19 +137,16 @@
         // 1. 吸氣 (Inhale): 區間 1 (MIN) -> 區間 2 (MIN->MAX)
         function inhale() {
             if (!isRunning) return;
-            
+
             text.textContent = "開始吸氣...";
             
-            // 【修正：確保移除波動類別】
-            ball.classList.remove('pulse-animation-simple'); 
             ball.style.transform = `scale(${SCALE_MIN})`; 
+            ball.classList.remove('pulse-animation-simple'); 
 
-            // 使用 requestAnimationFrame 確保瀏覽器完成前一個幀的渲染，再開始新過渡
             requestAnimationFrame(() => {
                 text.textContent = "吸氣區間..."; 
                 setTransitionDuration(TIMES.IN);
                 
-                // 【關鍵點】吸氣：從 MIN 轉換到 MAX
                 ball.style.transform = `scale(${SCALE_MAX})`; 
                 startCountdown(TIMES.IN, hold);
             });
@@ -123,11 +158,11 @@
 
             text.textContent = "憋氣..."; 
             
-            // 【關鍵修正】確保圓球在 MAX 尺寸上，且過渡時間設為極短，避免尺寸跳變
+            // 確保圓球在 MAX 尺寸上，且過渡時間設為極短，避免尺寸跳變
             setTransitionDuration(0.01); 
             ball.style.transform = `scale(${SCALE_MAX})`; 
             
-            // 【關鍵點】添加新的簡化波動類別
+            // 增加波動
             ball.classList.add('pulse-animation-simple'); 
             
             startCountdown(TIMES.HOLD, exhale);
@@ -137,14 +172,13 @@
         function exhale() {
             if (!isRunning) return;
 
-            // 區間 4: 顯示「吐氣區間...」
             text.textContent = "吐氣區間..."; 
             setTransitionDuration(TIMES.OUT);
             
             // 移除波動
             ball.classList.remove('pulse-animation-simple');
             
-            // 【關鍵點】吐氣：從 MAX 轉換到 MIN (確保銜接下一次吸氣)
+            // 圓球從 MAX 轉換到 MIN 
             ball.style.transform = `scale(${SCALE_MIN})`; 
 
             // 區間 5: 銜接點的文字提示
